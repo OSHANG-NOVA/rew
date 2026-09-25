@@ -1,6 +1,7 @@
 package com.rew;
 
 import com.gregtechceu.gtceu.api.registry.registrate.GTRegistrate;
+import com.rew.data.GtRecipeInjector;
 
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
@@ -38,6 +39,13 @@ public class RewMod {
             RewConfig.init();
         } catch (Throwable t) {
             LOGGER.error("[{}] 配置注册失败，将使用默认值", NAME, t);
+        }
+        // 记下磁盘基线指纹：这样首次 AddReloadListenerEvent 不会误判「内容变了」
+        // 而白跑一遍十几秒的 GT 全量配方重建。详见 GtRecipeInjector#init。
+        try {
+            GtRecipeInjector.init();
+        } catch (Throwable t) {
+            LOGGER.warn("[{}] 配方指纹基线记录失败，首次重载可能多花一次重建时间", NAME, t);
         }
         LOGGER.info("[{}] initialized (v{})", NAME, modVersion());
     }

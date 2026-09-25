@@ -9,6 +9,7 @@ import net.minecraft.resources.ResourceLocation;
 
 import com.rew.data.DisabledStore;
 import com.rew.data.DraftStore;
+import com.rew.data.GtRecipeInjector;
 
 import java.util.Set;
 import java.util.function.Consumer;
@@ -77,5 +78,8 @@ public class RewAddon implements IGTAddon {
         if (injected > 0) {
             RewMod.LOGGER.info("[{}] 已注入 {} 条编辑器配方", RewMod.MOD_ID, injected);
         }
+        // 这一轮已经把磁盘上的草稿写进 GT 动态包了，顺手记下指纹：
+        // 随后的第一次 AddReloadListenerEvent 就不会再白跑一遍十几秒的全量重建。
+        GtRecipeInjector.markRegenerated();
     }
 }
