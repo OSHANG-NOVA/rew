@@ -66,11 +66,15 @@ public final class RecipeIndex {
         this.drafts.putAll(DraftStore.loadAll());
 
         SnapshotStore.SnapshotFile cached = RewConfig.get().useSnapshotCache ? SnapshotStore.load() : null;
+        // 版本必须一并比对：SnapshotStore#load 在版本不符时仍会返回旧文件（为了回填禁用配方），
+        // 所以「能直接复用」这件事只能在这里判断，否则扫描器语义升级后旧缓存会被继续用下去。
         boolean cacheUsable = cached != null
                 && !forceRescan
                 && !RewConfig.get().alwaysRescan
+                && cached.version == SnapshotStore.FORMAT_VERSION
                 && RewMod.gtVersion().equals(cached.gtVersion);
 
+        // previous 始终保留旧文件，即使版本不符也要留着 —— 被禁用的配方只能从这里回填。
         SnapshotStore.SnapshotFile previous = cached;
 
         if (cacheUsable) {

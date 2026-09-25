@@ -28,8 +28,18 @@ import java.util.List;
  */
 public final class SnapshotStore {
 
-    /** 快照格式版本；结构不兼容时自增即可让旧缓存自动失效。 */
-    public static final int FORMAT_VERSION = 1;
+    /**
+     * 快照格式 / 扫描语义版本。
+     *
+     * <p>结构不兼容、或扫描器写入的字段语义变了（例如开始识别编程电路）时自增，
+     * 旧缓存就不再被复用，会自动重扫一遍。
+     *
+     * <p>注意：版本不符时 {@link #load()} **仍然返回**那个旧文件，只是不把它当作可用缓存。
+     * 这是必需的 —— 被禁用的配方在 GT 加载阶段就被剔除了，新扫描扫不到它们，
+     * 只能从旧快照里回填（见 {@code RecipeIndex#load} 的 {@code mergeDisabled}）。
+     * 若在这里直接返回 null，作者就再也看不到、也无法恢复自己禁用过的配方了。
+     */
+    public static final int FORMAT_VERSION = 2;
 
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
@@ -72,13 +82,23 @@ public final class SnapshotStore {
         }
     }
 
-    /** 读快照缓存；不存在或版本不符时返回 null（调用方应重新扫描）。 */
+    /**
+     * 读快照缓存；文件不存在或解析失败时返回 null。
+     *
+     * <p>版本不符时**不**返回 null，而是照常返回那个旧文件 —— 调用方
+     * （{@code RecipeIndex#load}）用 {@code sf.version == FORMAT_VERSION} 自行判断能否直接复用。
+     * 这样即使要重扫，也还留着旧快照用于回填被禁用的配方。
+     */
     public static SnapshotFile load() {
         Path f = snapshotFile();
         if (!Files.isRegularFile(f)) return null;
         try (Reader r = Files.newBufferedReader(f, StandardCharsets.UTF_8)) {
             SnapshotFile sf = GSON.fromJson(r, SnapshotFile.class);
-            if (sf == null || sf.version != FORMAT_VERSION) return null;
+            if (sf == null) return null;
+            if (sf.version != FORMAT_VERSION) {
+                RewMod.LOGGER.info("[{}] 快照缓存版本 {} != {}，将重新扫描（旧快照仍用于回填禁用项）",
+                        RewMod.MOD_ID, sf.version, FORMAT_VERSION);
+            }
             return sf;
         } catch (Exception e) {
             RewMod.LOGGER.warn("[{}] 快照缓存读取失败，将重新扫描: {}", RewMod.MOD_ID, e.toString());
