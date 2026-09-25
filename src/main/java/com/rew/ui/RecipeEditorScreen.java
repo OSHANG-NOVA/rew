@@ -131,7 +131,8 @@ public class RecipeEditorScreen extends WidgetGroup {
 
         inputTable = new ContentTableWidget(MARGIN, tablesTop, halfW, tablesH,
                 "输入", true, draft.itemInputs, draft.fluidInputs);
-        inputTable.setOnAddContent(isItem -> openPicker(true, isItem, null));
+        // 注意第二个参数是 fluid，与 isItem 相反 —— 传反了会让「+ 添加物品」也打开流体选择器。
+        inputTable.setOnAddContent(isItem -> openPicker(true, !isItem, null));
         inputTable.setOnEditContent(ref -> openPicker(true, ref.capability.equals("fluid"), ref));
         inputTable.rebuild();
         addWidget(inputTable);
@@ -163,7 +164,7 @@ public class RecipeEditorScreen extends WidgetGroup {
 
         outputTable = new ContentTableWidget(MARGIN * 2 + halfW, tablesTop, halfW, tablesH,
                 "输出", false, draft.itemOutputs, draft.fluidOutputs);
-        outputTable.setOnAddContent(isItem -> openPicker(false, isItem, null));
+        outputTable.setOnAddContent(isItem -> openPicker(false, !isItem, null));
         outputTable.setOnEditContent(ref -> openPicker(false, ref.capability.equals("fluid"), ref));
         outputTable.rebuild();
         addWidget(outputTable);
