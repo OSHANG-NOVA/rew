@@ -91,6 +91,9 @@ public class IngredientPickerScreen extends WidgetGroup {
                         : String.format("%.1f", existing.chance * 100.0 / existing.maxChance),
                 v -> {});
         chanceField.setClientSideWidget();
+        // GT 的语义：输入侧 chance==0 = 不消耗（催化剂），而不是「永远不产出」。
+        // 不写清这一点，作者填 0 之后会以为这条输入被丢掉了。
+        chanceField.setHoverTooltips("概率百分比；填 0 表示不消耗（催化剂，如编程电路、模具）");
         addWidget(chanceField);
 
         WidgetGroup cancel = new WidgetGroup(w - MARGIN - 50, fy, 50, FIELD_H);
