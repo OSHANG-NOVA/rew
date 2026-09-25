@@ -50,6 +50,30 @@ public final class RewIcons {
         return resolved;
     }
 
+    /**
+     * 带 NBT 的物品栈：{@code itemWithNbt("minecraft:enchanted_book", "{StoredEnchantments:[...]}")}。
+     *
+     * <p>用途是让「从磁盘读回的草稿」也能画出正确的图标与名字。草稿里存的是 SNBT 字符串
+     * （{@link com.rew.data.ContentRef#nbt}），而 {@code iconStack} 是 transient 的，
+     * 重新载入后只剩 ID；不重建就会把附魔书画成一本普通书。
+     *
+     * <p>结果不缓存：NBT 组合是无限的，缓存只会白白涨内存。调用点都在列表渲染，
+     * 量级很小。
+     */
+    public static ItemStack itemWithNbt(String id, String snbt) {
+        if (id == null || id.isEmpty() || snbt == null || snbt.isBlank()) return ItemStack.EMPTY;
+        try {
+            ItemStack base = itemOf(id);
+            if (base.isEmpty()) return ItemStack.EMPTY;
+            ItemStack stack = base.copy();
+            stack.setTag(net.minecraft.nbt.TagParser.parseTag(snbt));
+            return stack;
+        } catch (Throwable t) {
+            // SNBT 解析失败（格式过旧 / 被手工改坏）时退回无 NBT 的物品，不影响其它功能。
+            return ItemStack.EMPTY;
+        }
+    }
+
     /** 流体本身，供列表画它自己的贴图。查不到返回空栈。 */
     public static FluidStack fluidOf(String id) {
         if (id == null || id.isEmpty()) return FluidStack.EMPTY;

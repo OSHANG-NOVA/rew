@@ -15,6 +15,7 @@ import com.gregtechceu.gtceu.api.recipe.content.Content;
 import com.gregtechceu.gtceu.api.recipe.ingredient.EnergyStack;
 import com.gregtechceu.gtceu.api.recipe.ingredient.FluidIngredient;
 import com.gregtechceu.gtceu.api.recipe.ingredient.IntCircuitIngredient;
+import com.gregtechceu.gtceu.api.recipe.ingredient.SizedIngredient;
 import com.gregtechceu.gtceu.api.registry.GTRegistries;
 import com.rew.RewMod;
 
@@ -214,7 +215,7 @@ public final class RecipeWriter {
                         RewMod.MOD_ID, ref.id, t.toString());
             }
         }
-        // 兜底：只有 id + 数量可用（手写草稿 / 极旧缓存）。
+        // 兜底：只有 id + 数量（+ 可选 NBT）可用（手写草稿 / 极旧缓存 / raw 解析失败）。
         try {
             if (cap == ItemRecipeCapability.CAP) {
                 ResourceLocation rl = ResourceLocation.tryParse(ref.id);
@@ -222,7 +223,19 @@ public final class RecipeWriter {
                 Item item = BuiltInRegistries.ITEM.get(rl);
                 if (item == null) return null;
                 int count = (int) Math.max(1L, Math.min(Integer.MAX_VALUE, ref.amount));
-                return new Content(Ingredient.of(new ItemStack(item, count)), chance, maxChance, 0);
+                ItemStack stack = new ItemStack(item, count);
+                // 有 NBT 时必须包成 SizedIngredient：它内部会走 StrictNBTIngredient，
+                // 只给 Ingredient.of(stack) 的话 NBT 断言会被丢掉，附魔书就变成空书。
+                if (ref.nbt != null && !ref.nbt.isBlank()) {
+                    try {
+                        stack.setTag(net.minecraft.nbt.TagParser.parseTag(ref.nbt));
+                        return new Content(SizedIngredient.create(stack), chance, maxChance, 0);
+                    } catch (Throwable t) {
+                        RewMod.LOGGER.warn("[{}] 内容 {} 的 NBT 解析失败，退化为无 NBT 重建: {}",
+                                RewMod.MOD_ID, ref.id, t.toString());
+                    }
+                }
+                return new Content(Ingredient.of(stack), chance, maxChance, 0);
             }
             if (cap == FluidRecipeCapability.CAP) {
                 ResourceLocation rl = ResourceLocation.tryParse(ref.id);

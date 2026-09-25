@@ -242,7 +242,14 @@ public class ContentTableWidget extends WidgetGroup {
 
         // 行主体：显示内容摘要（数量 + 中文名 + 概率），文字让出图标的位置。
         String summary = ref.display();
-        if (ref.tag) summary = "§b[标签] §r" + summary;
+        if (ref.tag) {
+            summary = "§b[标签] §r" + summary;
+        } else {
+            // NBT 标记：同一个物品 ID 配不同 NBT 是完全不同的东西（附魔书 / 药水 / 成书），
+            // 不标出来作者会以为这只是一本普通书。nbtSnbt() 可能解析 JSON，只调一次。
+            String snbt = ref.nbtSnbt();
+            if (snbt != null && !snbt.isEmpty()) summary = "§d[NBT] §r" + summary;
+        }
         row.addWidget(new LabelWidget(20, 4, "§f" + summary));
 
         // 编辑按钮（点行本身也能编辑，这里额外给个明确的按钮）

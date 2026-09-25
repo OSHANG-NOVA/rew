@@ -241,6 +241,12 @@ public final class RecipeScanner {
                 ref.amount = stacks[0].getCount();
                 // 留一份带 NBT 的原栈，药水这类物品才能画出正确贴图和名字。
                 ref.iconStack = stacks[0].copy();
+                // 同时把 NBT 存成 SNBT 字段：iconStack 是 transient 的，草稿存盘再读回
+                // 就没了，只剩 ID；有这一份才能把附魔书 / 药水的图标与名字重建出来。
+                // 注意这里只记「最外层是单个物品」的情形 —— tag 类原料的 NBT 没意义。
+                if (stacks.length == 1 && stacks[0].hasTag()) {
+                    ref.nbt = stacks[0].getTag().toString();
+                }
                 // 兜底：附属模组若用普通 Ingredient 表达电路，靠物品 ID 认出来。
                 if (isCircuitStack(stacks[0])) {
                     ref.circuit = true;

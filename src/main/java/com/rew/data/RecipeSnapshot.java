@@ -92,6 +92,8 @@ public final class RecipeSnapshot {
         n.maxChance = c.maxChance;
         n.raw = c.raw;
         n.tag = c.tag;
+        // NBT 也要跟着走：草稿读回后 iconStack 是空的，全靠这个字段重建图标与名字。
+        n.nbt = c.nbt;
         // 编程电路的标记与配置号必须一起拷贝，否则保存草稿后电路会退化成普通物品。
         n.circuit = c.circuit;
         n.circuitConfig = c.circuitConfig;

@@ -166,8 +166,17 @@ public final class KubeJsExporter {
         return typeId.substring(colon + 1);
     }
 
+    /**
+     * 物品参数 → KJS 物品串。
+     *
+     * <p>KJS 的写法是 {@code "id {SNBT}"}（NBT 跟在空格后，见 {@code ItemStackJS#parse}），
+     * 数量则写成 {@code "3x id"}。带 NBT 的物品（附魔书、药水、写了内容的成书）必须把
+     * NBT 一起导出，否则脚本里会变成一本没有附魔的空书 —— 物品 ID 相同，但不是同一样东西。
+     */
     private static String itemArg(ContentRef c) {
         String base = c.tag ? "#" + c.id : c.id;
+        String nbt = c.nbtSnbt();
+        if (!nbt.isEmpty()) base = base + " " + nbt;
         String s = c.amount > 1L ? c.amount + "x " + base : base;
         return quote(s);
     }
