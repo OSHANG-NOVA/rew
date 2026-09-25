@@ -13,6 +13,7 @@ import com.gregtechceu.gtceu.api.recipe.content.Content;
 import com.gregtechceu.gtceu.api.recipe.ingredient.EnergyStack;
 import com.gregtechceu.gtceu.api.recipe.ingredient.FluidIngredient;
 import com.gregtechceu.gtceu.api.recipe.ingredient.IntCircuitIngredient;
+import com.gregtechceu.gtceu.api.recipe.ingredient.SizedIngredient;
 import com.gregtechceu.gtceu.api.registry.GTRegistries;
 import com.gregtechceu.gtceu.common.item.IntCircuitBehaviour;
 
@@ -213,19 +214,26 @@ public final class RecipeScanner {
         }
 
         Object inner = content.getContent();
-        if (inner instanceof IntCircuitIngredient circuit) {
-            // 编程电路是 GT 的特殊原料：同一个物品、靠 NBT 里的配置号区分 0~32。
-            // 它不该混在普通物品表里，而是单独走「电路配置」这一栏。
-            // 配置号字段本身是私有的，但 getItems() 给出的栈带着 NBT，
-            // 用 GT 公开的 IntCircuitBehaviour 就能把号读出来。
-            ItemStack[] stacks = circuit.getItems();
-            ItemStack stack = stacks.length > 0 ? stacks[0] : ItemStack.EMPTY;
-            ref.circuit = true;
-            ref.id = CIRCUIT_ITEM_ID;
-            ref.amount = 1L;
-            ref.circuitConfig = readCircuitConfig(stack);
-            ref.iconStack = stack.isEmpty() ? ItemStack.EMPTY : stack.copy();
-        } else if (inner instanceof Ingredient ingredient) {
+        if (inner instanceof Ingredient ingredient) {
+            // 编程电路可能被包在 SizedIngredient / IntProviderIngredient 里
+            // （GT 自己的 ItemRecipeCapability 就是这么判断的），所以必须先剥壳再认。
+            // SizedIngredient.getInner 是 GT 公开的静态解包方法，逐层剥到最里面那个。
+            Ingredient bare = unwrap(ingredient);
+            if (bare instanceof IntCircuitIngredient circuit) {
+                // 编程电路是 GT 的特殊原料：同一个物品、靠 NBT 里的配置号区分 0~32。
+                // 它不该混在普通物品表里，而是单独走「电路配置」这一栏。
+                // 配置号字段本身是私有的，但 getItems() 给出的栈带着 NBT，
+                // 用 GT 公开的 IntCircuitBehaviour 就能把号读出来。
+                ItemStack[] stacks = circuit.getItems();
+                ItemStack stack = stacks.length > 0 ? stacks[0] : ItemStack.EMPTY;
+                ref.circuit = true;
+                ref.id = CIRCUIT_ITEM_ID;
+                ref.amount = 1L;
+                ref.circuitConfig = readCircuitConfig(stack);
+                ref.iconStack = stack.isEmpty() ? ItemStack.EMPTY : stack.copy();
+                return ref;
+            }
+
             ItemStack[] stacks = ingredient.getItems();
             if (stacks.length > 0 && !stacks[0].isEmpty()) {
                 ResourceLocation key = BuiltInRegistries.ITEM.getKey(stacks[0].getItem());
@@ -233,7 +241,7 @@ public final class RecipeScanner {
                 ref.amount = stacks[0].getCount();
                 // 留一份带 NBT 的原栈，药水这类物品才能画出正确贴图和名字。
                 ref.iconStack = stacks[0].copy();
-                // 兜底：某些附属模组可能用普通 Ingredient 表达电路，靠物品 ID 认出来。
+                // 兜底：附属模组若用普通 Ingredient 表达电路，靠物品 ID 认出来。
                 if (isCircuitStack(stacks[0])) {
                     ref.circuit = true;
                     ref.circuitConfig = readCircuitConfig(stacks[0]);
@@ -256,6 +264,22 @@ public final class RecipeScanner {
             ref.id = inner.toString();
         }
         return ref;
+    }
+
+    /**
+     * 剥掉原料的外壳，取到最里面那个真正的 Ingredient。
+     *
+     * <p>直接委托 GT 自己的 {@code SizedIngredient.getInner}：它对
+     * {@code SizedIngredient} 与 {@code IntProviderIngredient} 逐层递归，
+     * 语义与 GT 内部判断电路时用的完全一致，我们不必自己维护这套解包规则。
+     */
+    private static Ingredient unwrap(Ingredient ingredient) {
+        if (ingredient == null) return null;
+        try {
+            return SizedIngredient.getInner(ingredient);
+        } catch (Throwable t) {
+            return ingredient;
+        }
     }
 
     /** 这个栈是不是 GT 的编程电路。 */

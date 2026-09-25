@@ -101,6 +101,14 @@ public final class KubeJsExporter {
                 .append('(').append(quote(r.id)).append(")\n");
 
         for (ContentRef c : r.itemInputs) {
+            // 编程电路必须走 KJS schema 的专用方法 circuit(n)：它内部是
+            // notConsumable(IntCircuitIngredient.of(n))。写成普通 itemInputs 会丢掉配置号
+            // —— 33 种变体共用同一个物品 ID，导出的脚本会全部变成 0 号电路。
+            if (c.circuit) {
+                int cfg = Math.max(0, Math.min(32, c.circuitConfig));
+                sb.append(".circuit(").append(cfg).append(")\n");
+                continue;
+            }
             sb.append(".itemInputs(").append(itemArg(c)).append(")\n");
         }
         for (ContentRef c : r.fluidInputs) {
