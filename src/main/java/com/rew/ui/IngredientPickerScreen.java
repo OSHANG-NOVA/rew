@@ -52,7 +52,6 @@ public class IngredientPickerScreen extends WidgetGroup {
     public IngredientPickerScreen(boolean fluid, ContentRef existing,
                                   Consumer<ContentRef> onPicked, Runnable onCancel) {
         super(0, 0, 0, 0);
-        setSize(360, 240);
         setBackground(RewTextures.panel());
 
         this.fluid = fluid;
@@ -60,8 +59,10 @@ public class IngredientPickerScreen extends WidgetGroup {
         this.onPicked = onPicked;
         this.onCancel = onCancel;
 
-        int w = 360;
-        int h = 240;
+        // 自适应：与其他界面一致，按当前 GUI 缩放下的真实屏幕尺寸布局。
+        int w = UiOpenHelper.screenWidth();
+        int h = UiOpenHelper.screenHeight();
+        setSize(w, h);
 
         addWidget(new LabelWidget(MARGIN, MARGIN,
                 "§b选择" + (fluid ? "流体" : "物品") + " §8（支持拼音搜索）"));

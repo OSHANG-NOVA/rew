@@ -2,6 +2,7 @@ package com.rew.ui.widget;
 
 import com.lowdragmc.lowdraglib.gui.util.DrawerHelper;
 import com.lowdragmc.lowdraglib.gui.widget.ButtonWidget;
+import com.lowdragmc.lowdraglib.gui.widget.DraggableScrollableWidgetGroup;
 import com.lowdragmc.lowdraglib.gui.widget.LabelWidget;
 import com.lowdragmc.lowdraglib.gui.widget.WidgetGroup;
 
@@ -11,6 +12,7 @@ import net.minecraftforge.fluids.FluidStack;
 
 import com.rew.data.ContentRef;
 import com.rew.i18n.RewIcons;
+import com.rew.ui.RewTextures;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,18 +24,25 @@ import java.util.function.Consumer;
  * <p>结构（按用户确认的形态）：
  * <pre>
  * ┌──────────────────────────┐
- * │ 物品                     │   ← 分段标题
- * │  ▸ 1x minecraft:iron_ingot  [概率 100%] [×] │
- * │  ▸ 2x #forge:ingots/iron    [概率  50%] [×] │
- * │ [+ 添加物品]             │
- * │ 流体                     │
- * │  ▸ 1000 mB minecraft:water  [概率 100%] [×] │
- * │ [+ 添加流体]             │
+ * │ 输入                     │   ← 固定表头（不随内容滚动）
+ * │ ┌──────────────────────┐ │
+ * │ │ 物品 (2)             │ │   ← 以下整块可滚动 + 自动裁剪
+ * │ │  ▸ 1x 铁锭  [×]      │ │
+ * │ │ [+ 添加物品]         │ │
+ * │ │ 流体 (1)             │ │
+ * │ │  ▸ 1000 mB 水   [×]  │ │
+ * │ │ [+ 添加流体]         │ │
+ * │ └──────────────────────┘ │
  * └──────────────────────────┘
  * </pre>
  *
  * <p>每张表内部把物品与流体分开两段，而不是混排成一张带「类型列」的表 ——
  * 因为 GT 配方的 item 与 fluid 是两类独立 capability，混排会让导出与校验都产生歧义。
+ *
+ * <p><b>为什么要滚动视口</b>：大型多方块配方的输入输出动辄十几个条目，早先行是直接按 y
+ * 加在本表上的，内容会画到表格框外、盖住下面的条件表，超出的部分既看不到也点不到。
+ * 现在全部行塞进 {@link DraggableScrollableWidgetGroup}：它自带 scissor 裁剪、
+ * 鼠标滚轮与可拖滚动条（宽度必须显式设置，LDLib 默认为 0 就不绘制）。
  */
 public class ContentTableWidget extends WidgetGroup {
 
@@ -41,19 +50,21 @@ public class ContentTableWidget extends WidgetGroup {
     private static final int ROW_H = 18;
     private static final int HEADER_H = 12;
     private static final int ADD_BTN_H = 14;
+    /** 滚动条宽度；内容超出一屏时出现，不超出时 LDLib 不画滑块。 */
+    private static final int BAR_W = 4;
 
     private final String title;
     private final boolean inputSide;
     private final List<ContentRef> itemContents = new ArrayList<>();
     private final List<ContentRef> fluidContents = new ArrayList<>();
 
+    /** 承载「物品段 + 流体段」的滚动视口；表头留在视口之外，滚动时始终可见。 */
+    private final DraggableScrollableWidgetGroup viewport;
+
     /** 点击某行内容 → 请求外部打开选择器替换它。 */
     private Consumer<ContentRef> onEditContent = null;
     /** 点击「+」 → 请求外部打开选择器新增。参数 true=物品，false=流体。 */
     private Consumer<Boolean> onAddContent = null;
-
-    /** 每行的控件句柄，用于原地刷新而不整表重建。 */
-    private final List<WidgetGroup> rowWidgets = new ArrayList<>();
 
     public ContentTableWidget(int x, int y, int width, int height,
                               String title, boolean inputSide,
@@ -63,6 +74,15 @@ public class ContentTableWidget extends WidgetGroup {
         this.inputSide = inputSide;
         if (initialItems != null) itemContents.addAll(initialItems);
         if (initialFluids != null) fluidContents.addAll(initialFluids);
+
+        addWidget(new LabelWidget(2, 1, "§f" + title));
+
+        // 视口占满表头以下的全部空间。高度可能为负（窗口极小时），兜到 0 防止 Size 抛异常。
+        int viewH = Math.max(0, height - HEADER_H);
+        this.viewport = new DraggableScrollableWidgetGroup(0, HEADER_H, width, viewH);
+        this.viewport.setYScrollBarWidth(BAR_W);
+        this.viewport.setYBarStyle(RewTextures.scrollTrack(), RewTextures.scrollBar());
+        addWidget(this.viewport);
     }
 
     public ContentTableWidget setOnEditContent(Consumer<ContentRef> handler) {
@@ -137,26 +157,41 @@ public class ContentTableWidget extends WidgetGroup {
             itemContents.set(idx, newRef);
         } else {
             idx = fluidContents.indexOf(oldRef);
-            if (idx >= 0) fluidContents.set(idx, newRef);
+            if (idx >= 0) {
+                fluidContents.set(idx, newRef);
+            }
         }
         rebuild();
     }
 
-    /** 全量重建控件树。行数很小（GT 单类型上限通常 < 20），重建比增量 diff 更可靠。 */
+    /** 可供行使用的净宽：让出右侧滚动条与一点内边距，避免按钮被压在滚动条下面。 */
+    private int contentWidth() {
+        return Math.max(40, getSize().width - BAR_W - 2);
+    }
+
+    /**
+     * 全量重建视口内的内容。
+     *
+     * <p>只清空视口而不是整张表 —— 表头与视口本身是常驻控件，清掉就没了。
+     * 重建前记住滚动位置，否则每加一条内容都会跳回顶部（输入输出多的时候很难受）。
+     */
     public void rebuild() {
-        clearAllWidgets();
+        int keepScroll = viewport.getScrollYOffset();
+        viewport.clearAllWidgets();
 
         int y = 0;
-        addWidget(new LabelWidget(0, y, "§f" + title));
-        y += HEADER_H;
-
         y = buildSection(y, "物品", itemContents, true);
 
         // 物品段与流体段之间的横线。
-        addWidget(SeparatorWidget.horizontal(2, y, getSize().width - 4));
+        viewport.addWidget(SeparatorWidget.horizontal(2, y, contentWidth() - 4));
         y += 3;
 
         y = buildSection(y, "流体", fluidContents, false);
+
+        // 内容变短时把滚动位置夹回合法范围；否则停在原处。
+        int bottom = viewport.getWidgetBottomHeight();
+        int maxScroll = Math.max(0, bottom - viewport.getSize().height);
+        viewport.setScrollYOffset(Math.max(0, Math.min(keepScroll, maxScroll)));
     }
 
     private int buildSection(int startY, String sectionName, List<ContentRef> contents, boolean isItem) {
@@ -177,31 +212,30 @@ public class ContentTableWidget extends WidgetGroup {
         String countText = circuits > 0
                 ? visible.size() + " + 电路×" + circuits
                 : String.valueOf(visible.size());
-        addWidget(new LabelWidget(2, y, "§7" + sectionName + " §8(" + countText + ")"));
+        viewport.addWidget(new LabelWidget(2, y, "§7" + sectionName + " §8(" + countText + ")"));
         y += HEADER_H;
 
         for (ContentRef ref : visible) {
-            WidgetGroup row = buildRow(y, ref, isItem);
-            addWidget(row);
-            rowWidgets.add(row);
+            viewport.addWidget(buildRow(y, ref, isItem));
             y += ROW_H;
         }
 
         // 「+ 添加」按钮：把该分段的能力类型告诉外部，由外部决定开物品还是流体选择器。
-        ButtonWidget addBtn = new ButtonWidget(2, y, getSize().width - 4, ADD_BTN_H,
+        ButtonWidget addBtn = new ButtonWidget(2, y, contentWidth() - 4, ADD_BTN_H,
                 cd -> {
                     if (onAddContent != null) onAddContent.accept(isItem);
                 });
-        addBtn.setButtonTexture(com.rew.ui.RewTextures.button());
+        addBtn.setButtonTexture(RewTextures.button());
         addBtn.setHoverTooltips("添加" + sectionName + "（点击后选择" + sectionName + "）");
-        addWidget(addBtn);
-        addWidget(new LabelWidget(6, y + 3, "§a+ 添加" + sectionName));
+        viewport.addWidget(addBtn);
+        viewport.addWidget(new LabelWidget(6, y + 3, "§a+ 添加" + sectionName));
         y += ADD_BTN_H + 4;
         return y;
     }
 
     private WidgetGroup buildRow(int y, ContentRef ref, boolean isItem) {
-        WidgetGroup row = new WidgetGroup(0, y, getSize().width, ROW_H);
+        int rowW = contentWidth();
+        WidgetGroup row = new WidgetGroup(0, y, rowW, ROW_H);
 
         // 行首贴图：物品画物品，流体画流体自己的贴图。
         row.addWidget(new ContentIcon(1, (ROW_H - 16) / 2, ref, isItem));
@@ -212,21 +246,21 @@ public class ContentTableWidget extends WidgetGroup {
         row.addWidget(new LabelWidget(20, 4, "§f" + summary));
 
         // 编辑按钮（点行本身也能编辑，这里额外给个明确的按钮）
-        ButtonWidget editBtn = new ButtonWidget(2, 1, getSize().width - 26, ROW_H - 2,
+        ButtonWidget editBtn = new ButtonWidget(2, 1, rowW - 26, ROW_H - 2,
                 cd -> {
                     if (onEditContent != null) onEditContent.accept(ref);
                 });
-        editBtn.setButtonTexture(com.rew.ui.RewTextures.transparent());
+        editBtn.setButtonTexture(RewTextures.transparent());
         editBtn.setHoverTooltips("点击编辑该" + (isItem ? "物品" : "流体") + "（数量 / 概率 / 替换）");
         row.addWidget(editBtn);
 
         // 删除按钮
-        ButtonWidget delBtn = new ButtonWidget(getSize().width - 18, 1, 16, ROW_H - 2,
+        ButtonWidget delBtn = new ButtonWidget(rowW - 18, 1, 16, ROW_H - 2,
                 cd -> removeContent(ref));
-        delBtn.setButtonTexture(com.rew.ui.RewTextures.button());
+        delBtn.setButtonTexture(RewTextures.button());
         delBtn.setHoverTooltips("§c删除这一行");
         row.addWidget(delBtn);
-        row.addWidget(new LabelWidget(getSize().width - 15, 3, "§c×"));
+        row.addWidget(new LabelWidget(rowW - 15, 3, "§c×"));
 
         return row;
     }

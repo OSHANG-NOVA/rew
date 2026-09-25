@@ -60,11 +60,14 @@ public class RecipeEditorScreen extends WidgetGroup {
         super(0, 0, 0, 0);
         this.draft = draft;
         this.type = type;
-        setSize(480, 270);
         setBackground(RewTextures.panel());
 
-        int w = 480;
-        int h = 270;
+        // 自适应：全屏界面的根控件最终会被撑到屏幕大小（见 UiOpenHelper#openFullScreen），
+        // 因此这里直接按当前 GUI 缩放下的真实尺寸布局。写死 480×270 的话，
+        // 大窗口下只占左上角一角、表格被压得很短，小窗口下又会溢出屏幕。
+        int w = UiOpenHelper.screenWidth();
+        int h = UiOpenHelper.screenHeight();
+        setSize(w, h);
 
         // ---- 顶栏 ----
         addWidget(new LabelWidget(MARGIN, MARGIN, "§b" + draft.id));
@@ -122,7 +125,9 @@ public class RecipeEditorScreen extends WidgetGroup {
         // ---- 三张表 ----
         int tablesTop = y + TOPFIELD_H + 6;
         int halfW = (w - MARGIN * 3) / 2;
-        int tablesH = (h - tablesTop - 40) * 2 / 3;
+        // 输入/输出表占剩余高度的 2/3，条件表吃掉剩下的。两者都留下限：
+        // 窗口极小时算出的 0 或负数会让 Size 抛异常，且表格至少要能看见一行。
+        int tablesH = Math.max(60, (h - tablesTop - 40) * 2 / 3);
 
         inputTable = new ContentTableWidget(MARGIN, tablesTop, halfW, tablesH,
                 "输入", true, draft.itemInputs, draft.fluidInputs);

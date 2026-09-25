@@ -61,11 +61,13 @@ public class RewEditorScreen extends WidgetGroup {
 
     public RewEditorScreen() {
         super(0, 0, 0, 0);
-        // 全屏：宽高在 attach 时由 LDLib 的 fullScreen 逻辑填充，这里先给一个安全初值。
-        setSize(480, 270);
 
-        int w = 480;
-        int h = 270;
+        // 自适应：全屏界面的根控件最终会被撑到屏幕大小（见 UiOpenHelper#openFullScreen），
+        // 因此布局直接按当前 GUI 缩放下的真实尺寸算。写死 480×270 的话，
+        // 大窗口下界面只占左上角一角、两个列表都被压得很短。
+        int w = UiOpenHelper.screenWidth();
+        int h = UiOpenHelper.screenHeight();
+        setSize(w, h);
 
         setBackground(RewTextures.panel());
 

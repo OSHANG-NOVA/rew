@@ -62,4 +62,20 @@ public final class UiOpenHelper {
     public static void openFullScreenReplacing(WidgetGroup root, String title) {
         openFullScreen(root, title);
     }
+
+    /**
+     * 当前 GUI 缩放下的屏幕宽（逻辑像素）。
+     *
+     * <p>界面若按写死的 480×270 布局，在大窗口下只占左上角一角，小窗口下又会溢出。
+     * 全屏界面的根控件尺寸最终就是屏幕尺寸（见 {@link #openFullScreen}），
+     * 因此布局应当直接以这里返回的真实尺寸为准，而不是拍一个常数。
+     */
+    public static int screenWidth() {
+        return Math.max(320, Minecraft.getInstance().getWindow().getGuiScaledWidth());
+    }
+
+    /** 当前 GUI 缩放下的屏幕高（逻辑像素）。 */
+    public static int screenHeight() {
+        return Math.max(200, Minecraft.getInstance().getWindow().getGuiScaledHeight());
+    }
 }
