@@ -136,8 +136,32 @@ public final class RecipeIndex {
                 byType.computeIfAbsent(copy.typeId, k -> new ArrayList<>()).add(copy);
                 searchBlobs.put(copy.id, copy.searchBlob());
             } else {
-                // 修改：用草稿内容覆盖显示，但保留原标记
-                existing.modified = true;
+                // 修改：用草稿内容覆盖列表显示，但保留「已修改」标记。
+                // 必须真的把对象换掉 —— 只设 existing.modified = true 的话，列表读到的
+                // 仍是快照里的旧内容（配方列表摘要、/rew gtm 的行、搜索串都是旧的），
+                // 作者改完保存后看不到自己的改动，会以为保存失败了。
+                // 用 copy() 而不是直接塞 draft：快照缓存要保持原样，否则 /rew save
+                // 会把未确认的编辑写进 snapshot.json。
+                RecipeSnapshot copy = draft.copy();
+                // 标记以草稿里持久化的 userAdded 为准，而不是一律当成「已修改」：
+                // 新建的配方在 /rew save + 重载后会被 GT 当成普通配方扫进快照，
+                // 于是走到这条「已存在」分支；若在这里写死 modified=true，
+                // 作者新建的配方在列表里就会显示成 §e*（已修改）而不是 §a+（新建）。
+                copy.userAdded = draft.userAdded;
+                copy.modified = !draft.userAdded;
+                copy.disabled = disabled.contains(copy.id);
+                byId.put(copy.id, copy);
+                // byType 里那条也得指向同一个新对象，否则列表仍拿着旧快照对象。
+                List<RecipeSnapshot> list = byType.get(copy.typeId);
+                if (list != null) {
+                    for (int i = 0; i < list.size(); i++) {
+                        if (list.get(i).id.equals(copy.id)) {
+                            list.set(i, copy);
+                            break;
+                        }
+                    }
+                }
+                searchBlobs.put(copy.id, copy.searchBlob());
             }
         }
         for (List<RecipeSnapshot> list : byType.values()) {

@@ -51,8 +51,14 @@ public final class RecipeSnapshot {
     /** 运行时标记：是否被本工具修改过（不写入缓存）。 */
     public transient boolean modified = false;
 
-    /** 运行时标记：是否由本工具新建（不写入缓存）。 */
-    public transient boolean userAdded = false;
+    /**
+     * 是否由本工具新建。**必须持久化**，不能像 modified / disabled 那样 transient。
+     *
+     * <p>原因：新建的配方经 {@code /rew save} + 重载后，GT 已经把它当成一条普通配方
+     * 扫进了快照，于是 {@link RecipeIndex#applyOverlays} 会走「已存在 → 修改」那条分支。
+     * 不把标记存进草稿文件的话，新建的配方在列表里会被错标成「已修改」。
+     */
+    public boolean userAdded = false;
 
     /** 运行时标记：草稿文件路径（相对 config/rew），用于保存时定位。 */
     public transient String draftFile = "";
@@ -68,6 +74,9 @@ public final class RecipeSnapshot {
         s.inputAmperage = inputAmperage;
         s.outputEUt = outputEUt;
         s.outputAmperage = outputAmperage;
+        // 「新建」标记要跟着拷贝：编辑器保存时走的是 index.putDraft(draft.copy())，
+        // 若这里丢掉，作者一点保存，新建的配方就退化成「已修改」。
+        s.userAdded = userAdded;
         for (ContentRef c : itemInputs) s.itemInputs.add(copyContent(c));
         for (ContentRef c : itemOutputs) s.itemOutputs.add(copyContent(c));
         for (ContentRef c : fluidInputs) s.fluidInputs.add(copyContent(c));
