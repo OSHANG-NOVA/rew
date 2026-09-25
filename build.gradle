@@ -1,0 +1,179 @@
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
+
+minecraft {
+    mappings channel: mapping_channel, version: mapping_version
+    copyIdeResources = true
+
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        client {
+            property 'forge.enabledGameTestNamespaces', mod_id
+        }
+
+        server {
+            property 'forge.enabledGameTestNamespaces', mod_id
+            args '--nogui'
+        }
+
+        data {
+            workingDirectory project.file('run-data')
+            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+        }
+    }
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+repositories {
+    // 本机优先：作者机器上 Configuration 已按 Modrinth 同坐标装在 mavenLocal，
+    // 放在最前可避免本机 JDK 不信任 Modrinth 证书链时联网取件失败。
+    // 他人 clone 后本地没有这份，会自动落到下面的 Modrinth 公开源，两边坐标一致。
+    mavenLocal()
+
+    maven {
+        name = 'SpongePowered'
+        url = 'https://repo.spongepowered.org/repository/maven-public/'
+    }
+
+    maven {
+        name = 'Aliyun Maven Central Mirror'
+        url = 'https://maven.aliyun.com/repository/public'
+    }
+
+    maven {
+        name = 'GTCEu Maven'
+        url = 'https://maven.gtceu.com'
+        content {
+            includeGroup 'com.gregtechceu.gtceu'
+        }
+    }
+    maven {
+        name = 'FirstDarkDev'
+        url = 'https://maven.firstdark.dev/snapshots'
+    }
+    maven {
+        name = 'Tterrag Registrate'
+        url = 'https://maven.tterrag.com/'
+        content {
+            includeGroup 'com.tterrag.registrate'
+        }
+    }
+
+    // Modrinth Maven —— 提供 Configuration（配置库）。
+    // 刻意用「版本 ID」而不是版本号 3.1.0 取件：同一版本号下 Modrinth 为各加载器
+    // 分别存了一份 jar，按版本号取有可能拿到 Fabric 那份；按 ID 取则精确对应
+    // Forge 1.20.1 的 configuration-forge-1.20.1-3.1.0.jar。
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content {
+            includeGroup 'maven.modrinth'
+        }
+    }
+
+    // 本机缓存回退。放在最后：默认情况下上面的公开仓库已能取到全部依赖，
+    // 只有本机 JVM 信任库不认 Modrinth 证书时才会落到这里取同坐标的副本。
+    // 其他机器上这个目录不存在，Gradle 会直接跳过，因此不影响 clone 后构建。
+    mavenLocal()
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    // GregTech CEu Modern —— 本模组的全部编辑对象都来自它
+    implementation fg.deobf("com.gregtechceu.gtceu:gtceu-${minecraft_version}:${gtceu_version}:slim") {
+        transitive = false
+    }
+    // LDLib —— GUI 底座（gtceu jarjar 内嵌 1.0.40.b，与 nova_mainlib 声明一致）
+    implementation fg.deobf("com.lowdragmc.ldlib:ldlib-forge-${minecraft_version}:${ldlib_version}") {
+        transitive = false
+    }
+    // Registrate —— GTM API 编译期需要
+    implementation fg.deobf("com.tterrag.registrate:Registrate:${registrate_version}")
+
+    // Configuration 3.1.0 —— 与测试环境实装版本一致（gtceu 内嵌的是 2.2.0）。
+    // 走 Modrinth 公开 maven 按版本 ID 取件，仓库 clone 下来即可直接构建，
+    // 不依赖任何本机 mavenLocal 内容。
+    implementation fg.deobf("maven.modrinth:configuration:${configuration_version_id}")
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+            minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
+            forge_version: forge_version, forge_version_range: forge_version_range,
+            loader_version_range: loader_version_range,
+            mod_id: mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
+            mod_authors: mod_authors, mod_description: mod_description,
+    ]
+    inputs.properties replaceProperties
+
+    // Windows 上 expand() 默认用平台编码(GBK)读文件，会破坏 UTF-8 中文，显式指定
+    setFilteringCharset('UTF-8')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties + [project: project]
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes([
+                'Specification-Title'     : mod_id,
+                'Specification-Vendor'    : mod_authors,
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : project.name,
+                'Implementation-Version'  : project.jar.archiveVersion,
+                'Implementation-Vendor'   : mod_authors,
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+
+    finalizedBy 'reobfJar'
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            artifact jar
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/mcmodsrepo"
+        }
+        mavenLocal()
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

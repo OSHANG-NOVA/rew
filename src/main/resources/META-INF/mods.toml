@@ -1,0 +1,58 @@
+modLoader="javafml"
+loaderVersion="${loader_version_range}"
+license="${mod_license}"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+authors="${mod_authors}"
+description='''${mod_description}'''
+
+accessTransformers = []
+
+[[dependencies.${mod_id}]]
+    modId="forge"
+    mandatory=true
+    versionRange="${forge_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+# GregTech CEu Modern is the sole editing target; the whole tool is built on its API.
+# ordering="AFTER" is required so that GTRegistries.RECIPE_TYPES is populated before we touch it.
+[[dependencies.${mod_id}]]
+    modId="gtceu"
+    mandatory=true
+    versionRange="[7.5.3,)"
+    ordering="AFTER"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="ldlib"
+    mandatory=true
+    versionRange="[1.0.40,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# Configuration supplies the YAML config layer (config/rew.yaml).
+[[dependencies.${mod_id}]]
+    modId="configuration"
+    mandatory=true
+    versionRange="[3.1.0,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# KubeJS is optional: only needed when the author wants to export/apply generated scripts.
+[[dependencies.${mod_id}]]
+    modId="kubejs"
+    mandatory=false
+    versionRange="[2001,)"
+    ordering="AFTER"
+    side="BOTH"
