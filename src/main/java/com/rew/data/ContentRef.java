@@ -71,7 +71,9 @@ public final class ContentRef {
         ref.circuitConfig = Math.max(0, Math.min(32, configuration));
         ref.id = "gtceu:programmed_circuit";
         ref.amount = 1L;
-        ref.chance = 10000;
+        // 与 GT 的 circuitMeta(n) 对齐：它走 notConsumable，chance 写 0。
+        // 电路是「插在电路槽里一直放着」的催化剂，绝不能被机器消耗掉。
+        ref.chance = 0;
         ref.maxChance = 10000;
         return ref;
     }
@@ -80,8 +82,24 @@ public final class ContentRef {
         return chance >= maxChance;
     }
 
-    /** 概率的百分比文本，必定产出时返回空串。 */
+    /**
+     * 是否为「不消耗」输入（催化剂）。
+     *
+     * <p>GT 用 {@code chance == 0} 表达这个概念，而不是另开一个布尔字段：
+     * 见 {@code ItemRecipeCapability} 里
+     * {@code if (content.chance == 0) { nonConsumables.addTo(ing, count); continue; }}
+     * 以及 Fluid / EU 两个同名分支。编程电路、模具这类「占位但吃不到」的输入都靠它。
+     *
+     * <p>因此 UI 上不能再按百分比显示 —— 0% 会被误读成「永远不产出」，
+     * 实际含义恰恰相反：物品必须放着，但不会被机器吃掉。
+     */
+    public boolean notConsumable() {
+        return chance <= 0;
+    }
+
+    /** 概率的百分比文本；必定产出时返回空串，不消耗时返回「不消耗」。 */
     public String chanceText() {
+        if (notConsumable()) return "不消耗";
         if (isCertain() || maxChance <= 0) return "";
         return String.format("%.1f%%", chance * 100.0 / maxChance);
     }

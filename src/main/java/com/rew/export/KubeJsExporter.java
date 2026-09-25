@@ -109,10 +109,14 @@ public final class KubeJsExporter {
                 sb.append(".circuit(").append(cfg).append(")\n");
                 continue;
             }
-            sb.append(".itemInputs(").append(itemArg(c)).append(")\n");
+            // 模具这类催化剂在 GT 里同样靠 chance==0 表达（见 ItemRecipeCapability）。
+            // 导出成普通 itemInputs 会让机器把它消耗掉，必须走 notConsumable。
+            sb.append(c.notConsumable() ? ".notConsumable(" : ".itemInputs(")
+                    .append(itemArg(c)).append(")\n");
         }
         for (ContentRef c : r.fluidInputs) {
-            sb.append(".inputFluids(").append(fluidArg(c)).append(")\n");
+            sb.append(c.notConsumable() ? ".notConsumableFluid(" : ".inputFluids(")
+                    .append(fluidArg(c)).append(")\n");
         }
         for (ContentRef c : r.itemOutputs) {
             if (c.isCertain()) {

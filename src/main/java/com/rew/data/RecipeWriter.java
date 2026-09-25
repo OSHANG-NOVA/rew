@@ -177,15 +177,26 @@ public final class RecipeWriter {
 
     @Nullable
     private static Content contentOf(RecipeCapability<?> cap, ContentRef ref) {
-        int chance = ref.chance <= 0 ? 10000 : ref.chance;
         int maxChance = ref.maxChance <= 0 ? 10000 : ref.maxChance;
+
+        // chance 必须原样保留，不能把 0 改写成 10000。
+        // GT 用 `chance == 0` 表示「不消耗」（催化剂）：见 ItemRecipeCapability 里
+        //   if (content.chance == 0) { nonConsumables.addTo(ing, count); continue; }
+        // 以及 FluidRecipeCapability / EURecipeCapability 的同名分支。
+        // 早先这里写的是 `ref.chance <= 0 ? 10000 : ref.chance`，会把所有催化剂
+        // （包括编程电路、模具这类 notConsumable 输入）重建得「会被消耗」。
+        int chance = Math.max(0, Math.min(ref.chance, maxChance));
 
         // 编程电路优先于 raw 回放：作者在编辑器里改过配置号后，raw 里还是旧号，
         // 必须以 circuitConfig 为准重新构造，否则改了等于没改。
         if (ref.circuit && cap == ItemRecipeCapability.CAP) {
             try {
                 int cfg = Math.max(0, Math.min(32, ref.circuitConfig));
-                return new Content(IntCircuitIngredient.of(cfg), chance, maxChance, 0);
+                // 与 GT 的 circuitMeta(n) 逐字对齐：它内部是
+                // notConsumable(IntCircuitIngredient.of(n))，而 notConsumable 会把
+                // chance 置 0 后再写入。所以这里写死 0，而不是沿用 ref.chance ——
+                // 旧草稿里电路条目的 chance 曾被错误地存成 10000，写死 0 可以兜住它。
+                return new Content(IntCircuitIngredient.of(cfg), 0, maxChance, 0);
             } catch (Throwable t) {
                 RewMod.LOGGER.warn("[{}] 编程电路 #{} 重建失败: {}",
                         RewMod.MOD_ID, ref.circuitConfig, t.toString());
