@@ -36,6 +36,18 @@ public final class ContentRef {
     /** 是否来自标签（tag），仅用于 UI 提示。 */
     public boolean tag = false;
 
+    /**
+     * 是否为 GT 编程电路（{@code IntCircuitIngredient}）。
+     *
+     * <p>编程电路在 GT 里是特殊原料：33 种变体共用同一个物品，靠 NBT 里的配置号区分，
+     * 用物品 ID 根本表达不出「几号电路」。所以这里单列一个标记，UI 上不再当成普通物品，
+     * 而是显示成「编程电路 #N」，重建时走 {@code IntCircuitIngredient.of(N)}。
+     */
+    public boolean circuit = false;
+
+    /** 编程电路的配置号（0~32）；仅 {@link #circuit} 为 true 时有意义。 */
+    public int circuitConfig = 0;
+
     /** 本地化显示名，运行时填充，不写入缓存。 */
     public transient String displayName = "";
 
@@ -46,6 +58,23 @@ public final class ContentRef {
      * 这里留一份带 NBT 的原栈，图标和名字都用它。不写入缓存，重扫时重新生成。
      */
     public transient ItemStack iconStack = ItemStack.EMPTY;
+
+    /**
+     * 造一个编程电路条目（「电路」配置项改动时用）。
+     *
+     * <p>电路恒为单个、必定消耗，所以数量与概率都写死，作者不需要也不该改它们。
+     */
+    public static ContentRef ofCircuit(int configuration) {
+        ContentRef ref = new ContentRef();
+        ref.capability = "item";
+        ref.circuit = true;
+        ref.circuitConfig = Math.max(0, Math.min(32, configuration));
+        ref.id = "gtceu:programmed_circuit";
+        ref.amount = 1L;
+        ref.chance = 10000;
+        ref.maxChance = 10000;
+        return ref;
+    }
 
     public boolean isCertain() {
         return chance >= maxChance;
@@ -63,6 +92,8 @@ public final class ContentRef {
      * <p>结果缓存在 {@link #displayName} 上，列表反复渲染时不再查注册表。
      */
     public String localizedName() {
+        // 编程电路的名字由配置号决定，与物品名无关（33 种变体同名同贴图，只有编号不同）。
+        if (circuit) return "编程电路 #" + circuitConfig;
         if (displayName != null && !displayName.isEmpty()) return displayName;
         String resolved = "";
         // 带 NBT 的物品（药水等）用原栈的名字，否则只能得到「药水」这种泛称。
@@ -78,6 +109,8 @@ public final class ContentRef {
 
     /** 这一行该画的物品贴图：优先用带 NBT 的原栈，没有再按 ID 取。 */
     public ItemStack iconItem() {
+        // 编程电路的贴图随配置号变化，必须按号现造，不能退回通用物品。
+        if (circuit) return RewIcons.circuitOf(circuitConfig);
         if (iconStack != null && !iconStack.isEmpty()) return iconStack;
         return RewIcons.itemOf(id);
     }
@@ -85,7 +118,8 @@ public final class ContentRef {
     /** 列表里显示的一行文本。 */
     public String display() {
         String name = localizedName();
-        if (amount > 1L) name = amount + "x " + name;
+        // 电路恒为单个，不带数量前缀。
+        if (!circuit && amount > 1L) name = amount + "x " + name;
         if (!isCertain()) name = name + " [" + chanceText() + "]";
         return name;
     }

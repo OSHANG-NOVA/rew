@@ -51,6 +51,8 @@ public class RecipeEditorScreen extends WidgetGroup {
     private TextFieldWidget durationField;
     private TextFieldWidget euField;
     private TextFieldWidget ampField;
+    /** 编程电路配置号；留空表示这条配方不用电路。 */
+    private TextFieldWidget circuitField;
 
     private LabelWidget statusLabel;
 
@@ -128,6 +130,31 @@ public class RecipeEditorScreen extends WidgetGroup {
         inputTable.setOnEditContent(ref -> openPicker(true, ref.capability.equals("fluid"), ref));
         inputTable.rebuild();
         addWidget(inputTable);
+
+        // ---- 编程电路 ----
+        // GT 的 33 种电路变体共用同一个物品 ID，只有 NBT 里的配置号不同，放进物品表里
+        // 会长得一模一样、也看不出是几号；所以单列一个 0~32 的数字项，留空表示不用电路。
+        // 它写进的是输入表底层那条电路数据，与普通物品行并存互不干扰。
+        addWidget(new LabelWidget(MARGIN + 300, y + 3, "§7电路"));
+        circuitField = new TextFieldWidget(MARGIN + 330, y, 36, TOPFIELD_H,
+                () -> {
+                    Integer c = inputTable.circuit();
+                    return c == null ? "" : String.valueOf(c);
+                },
+                value -> {
+                    String t = value == null ? "" : value.trim();
+                    if (t.isEmpty()) {
+                        inputTable.setCircuit(null);
+                        return;
+                    }
+                    Integer parsed = parseInt(t);
+                    if (parsed == null) return;
+                    inputTable.setCircuit(Math.max(0, Math.min(32, parsed)));
+                });
+        circuitField.setClientSideWidget();
+        circuitField.setHoverTooltips("编程电路配置号 0~32；留空表示这条配方不使用电路");
+        addWidget(circuitField);
+        addWidget(new LabelWidget(MARGIN + 370, y + 3, "§8(0-32，留空=无)"));
 
         outputTable = new ContentTableWidget(MARGIN * 2 + halfW, tablesTop, halfW, tablesH,
                 "输出", false, draft.itemOutputs, draft.fluidOutputs);

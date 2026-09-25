@@ -105,6 +105,9 @@ public class IngredientPickerScreen extends WidgetGroup {
         refreshList();
     }
 
+    /** 编程电路的物品 ID。它在编辑器里有专门的「电路」配置项，不再作为普通物品出现在这里。 */
+    private static final String CIRCUIT_ITEM_ID = "gtceu:programmed_circuit";
+
     private void collectIds() {
         allIds.clear();
         if (fluid) {
@@ -113,6 +116,9 @@ public class IngredientPickerScreen extends WidgetGroup {
             }
         } else {
             for (ResourceLocation rl : ForgeRegistries.ITEMS.getKeys()) {
+                // 编程电路剔除：33 种变体共用同一个 ID，放这里只能选出 0 号，
+                // 作者要的是「几号电路」，那是编辑器的电路配置项负责的事。
+                if (CIRCUIT_ITEM_ID.equals(rl.toString())) continue;
                 allIds.add(rl.toString());
             }
         }

@@ -35,6 +35,8 @@ public final class RewIcons {
 
     private static final java.util.Map<String, ItemStack> ITEMS = new java.util.HashMap<>();
     private static final java.util.Map<String, FluidStack> FLUIDS = new java.util.HashMap<>();
+    /** 编程电路：配置号 → 带 NBT 的栈。33 个，数量固定，直接缓存。 */
+    private static final java.util.Map<Integer, ItemStack> CIRCUITS = new java.util.HashMap<>();
     /** 配方类型 → 代表机器的物品。空栈表示该类型没有对应机器。 */
     private static java.util.Map<String, ItemStack> MACHINE_BY_TYPE = null;
 
@@ -100,6 +102,27 @@ public final class RewIcons {
             }
         }
         MACHINE_BY_TYPE = result;
+    }
+
+    /**
+     * 编程电路（{@code gtceu:programmed_circuit}）的图标。
+     *
+     * <p>33 种变体共用同一个物品，外观上的差别只在 NBT 里的配置号，所以必须按号现造一个栈，
+     * 不能退回 {@link #itemOf}（那样只会得到 0 号）。
+     */
+    public static ItemStack circuitOf(int configuration) {
+        if (configuration < 0 || configuration > 32) return ItemStack.EMPTY;
+        ItemStack cached = CIRCUITS.get(configuration);
+        if (cached != null) return cached;
+        ItemStack stack = ItemStack.EMPTY;
+        try {
+            // 走 GT 自己的工厂，保证与游戏内电路完全一致（含配置号 NBT）。
+            stack = com.gregtechceu.gtceu.common.item.IntCircuitBehaviour.stack(configuration);
+        } catch (Throwable ignored) {
+            // GT 未就绪时留空，列表只是不画图标，不影响其它功能。
+        }
+        CIRCUITS.put(configuration, stack);
+        return stack;
     }
 
     /**

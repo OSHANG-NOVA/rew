@@ -14,6 +14,7 @@ import com.gregtechceu.gtceu.api.recipe.RecipeCondition;
 import com.gregtechceu.gtceu.api.recipe.content.Content;
 import com.gregtechceu.gtceu.api.recipe.ingredient.EnergyStack;
 import com.gregtechceu.gtceu.api.recipe.ingredient.FluidIngredient;
+import com.gregtechceu.gtceu.api.recipe.ingredient.IntCircuitIngredient;
 import com.gregtechceu.gtceu.api.registry.GTRegistries;
 import com.rew.RewMod;
 
@@ -176,7 +177,23 @@ public final class RecipeWriter {
 
     @Nullable
     private static Content contentOf(RecipeCapability<?> cap, ContentRef ref) {
-        // 首选：原样 JSON 回放，无损。
+        int chance = ref.chance <= 0 ? 10000 : ref.chance;
+        int maxChance = ref.maxChance <= 0 ? 10000 : ref.maxChance;
+
+        // 编程电路优先于 raw 回放：作者在编辑器里改过配置号后，raw 里还是旧号，
+        // 必须以 circuitConfig 为准重新构造，否则改了等于没改。
+        if (ref.circuit && cap == ItemRecipeCapability.CAP) {
+            try {
+                int cfg = Math.max(0, Math.min(32, ref.circuitConfig));
+                return new Content(IntCircuitIngredient.of(cfg), chance, maxChance, 0);
+            } catch (Throwable t) {
+                RewMod.LOGGER.warn("[{}] 编程电路 #{} 重建失败: {}",
+                        RewMod.MOD_ID, ref.circuitConfig, t.toString());
+                return null;
+            }
+        }
+
+        // 其次：原样 JSON 回放，无损。
         if (ref.raw != null && !ref.raw.isBlank()) {
             try {
                 JsonElement el = JsonParser.parseString(ref.raw);
@@ -188,8 +205,6 @@ public final class RecipeWriter {
         }
         // 兜底：只有 id + 数量可用（手写草稿 / 极旧缓存）。
         try {
-            int chance = ref.chance <= 0 ? 10000 : ref.chance;
-            int maxChance = ref.maxChance <= 0 ? 10000 : ref.maxChance;
             if (cap == ItemRecipeCapability.CAP) {
                 ResourceLocation rl = ResourceLocation.tryParse(ref.id);
                 if (rl == null) return null;

@@ -108,6 +108,29 @@ public class ContentTableWidget extends WidgetGroup {
         rebuild();
     }
 
+    /**
+     * 设置本表的编程电路配置号；传 null 表示这张表不需要电路。
+     *
+     * <p>为什么电路不走「物品表的一行」：GT 的 33 种电路变体共用同一个物品 ID，
+     * 只有 NBT 里的配置号不同。放进物品表里，33 种会长得一模一样、也无法一眼看出是几号。
+     * 因此把它抽成编辑器顶部的一个数字输入项，这里只负责在底层列表里增删那一条。
+     */
+    public void setCircuit(Integer config) {
+        itemContents.removeIf(r -> r.circuit);
+        if (config != null) {
+            itemContents.add(ContentRef.ofCircuit(config));
+        }
+        rebuild();
+    }
+
+    /** 本表当前的电路配置号；没有电路时返回 null。 */
+    public Integer circuit() {
+        for (ContentRef r : itemContents) {
+            if (r.circuit) return r.circuitConfig;
+        }
+        return null;
+    }
+
     public void replaceContent(ContentRef oldRef, ContentRef newRef) {
         int idx = itemContents.indexOf(oldRef);
         if (idx >= 0) {
@@ -138,10 +161,26 @@ public class ContentTableWidget extends WidgetGroup {
 
     private int buildSection(int startY, String sectionName, List<ContentRef> contents, boolean isItem) {
         int y = startY;
-        addWidget(new LabelWidget(2, y, "§7" + sectionName + " §8(" + contents.size() + ")"));
+
+        // 编程电路不在表里占一行：它由编辑器顶部的「电路」配置项统一管理。
+        // 33 种变体共用一个物品 ID，混进物品表里只能显示成同一个样子，没有可读性；
+        // 数据仍留在底层列表里，保存时照常写回，只是不在这里渲染。
+        List<ContentRef> visible = new ArrayList<>(contents.size());
+        int circuits = 0;
+        for (ContentRef ref : contents) {
+            if (ref.circuit) {
+                circuits++;
+                continue;
+            }
+            visible.add(ref);
+        }
+        String countText = circuits > 0
+                ? visible.size() + " + 电路×" + circuits
+                : String.valueOf(visible.size());
+        addWidget(new LabelWidget(2, y, "§7" + sectionName + " §8(" + countText + ")"));
         y += HEADER_H;
 
-        for (ContentRef ref : contents) {
+        for (ContentRef ref : visible) {
             WidgetGroup row = buildRow(y, ref, isItem);
             addWidget(row);
             rowWidgets.add(row);

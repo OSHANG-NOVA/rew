@@ -12,7 +12,9 @@ import com.gregtechceu.gtceu.api.recipe.category.GTRecipeCategory;
 import com.gregtechceu.gtceu.api.recipe.content.Content;
 import com.gregtechceu.gtceu.api.recipe.ingredient.EnergyStack;
 import com.gregtechceu.gtceu.api.recipe.ingredient.FluidIngredient;
+import com.gregtechceu.gtceu.api.recipe.ingredient.IntCircuitIngredient;
 import com.gregtechceu.gtceu.api.registry.GTRegistries;
+import com.gregtechceu.gtceu.common.item.IntCircuitBehaviour;
 
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -49,6 +51,9 @@ import java.util.function.Supplier;
 public final class RecipeScanner {
 
     private RecipeScanner() {}
+
+    /** GT 编程电路的物品 ID。33 种变体共用同一个物品，靠 NBT 里的配置号区分。 */
+    private static final String CIRCUIT_ITEM_ID = "gtceu:programmed_circuit";
 
     /** 扫描进度回调，供 UI 显示进度用。 */
     public interface Progress {
@@ -208,7 +213,19 @@ public final class RecipeScanner {
         }
 
         Object inner = content.getContent();
-        if (inner instanceof Ingredient ingredient) {
+        if (inner instanceof IntCircuitIngredient circuit) {
+            // 编程电路是 GT 的特殊原料：同一个物品、靠 NBT 里的配置号区分 0~32。
+            // 它不该混在普通物品表里，而是单独走「电路配置」这一栏。
+            // 配置号字段本身是私有的，但 getItems() 给出的栈带着 NBT，
+            // 用 GT 公开的 IntCircuitBehaviour 就能把号读出来。
+            ItemStack[] stacks = circuit.getItems();
+            ItemStack stack = stacks.length > 0 ? stacks[0] : ItemStack.EMPTY;
+            ref.circuit = true;
+            ref.id = CIRCUIT_ITEM_ID;
+            ref.amount = 1L;
+            ref.circuitConfig = readCircuitConfig(stack);
+            ref.iconStack = stack.isEmpty() ? ItemStack.EMPTY : stack.copy();
+        } else if (inner instanceof Ingredient ingredient) {
             ItemStack[] stacks = ingredient.getItems();
             if (stacks.length > 0 && !stacks[0].isEmpty()) {
                 ResourceLocation key = BuiltInRegistries.ITEM.getKey(stacks[0].getItem());
@@ -216,6 +233,11 @@ public final class RecipeScanner {
                 ref.amount = stacks[0].getCount();
                 // 留一份带 NBT 的原栈，药水这类物品才能画出正确贴图和名字。
                 ref.iconStack = stacks[0].copy();
+                // 兜底：某些附属模组可能用普通 Ingredient 表达电路，靠物品 ID 认出来。
+                if (isCircuitStack(stacks[0])) {
+                    ref.circuit = true;
+                    ref.circuitConfig = readCircuitConfig(stacks[0]);
+                }
             }
             // 多个候选说明这是 tag 或复合材料，UI 上给出提示
             ref.tag = stacks.length > 1;
@@ -234,6 +256,26 @@ public final class RecipeScanner {
             ref.id = inner.toString();
         }
         return ref;
+    }
+
+    /** 这个栈是不是 GT 的编程电路。 */
+    private static boolean isCircuitStack(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        try {
+            return IntCircuitBehaviour.isIntegratedCircuit(stack);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** 读编程电路的配置号；读不到（没 NBT）按 0 处理，与 GT 自身行为一致。 */
+    private static int readCircuitConfig(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return 0;
+        try {
+            return IntCircuitBehaviour.getCircuitConfiguration(stack);
+        } catch (Throwable t) {
+            return 0;
+        }
     }
 
     private static ConditionRef toConditionRef(RecipeCondition<?> condition) {

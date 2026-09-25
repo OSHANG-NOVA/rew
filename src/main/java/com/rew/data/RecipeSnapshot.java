@@ -92,6 +92,9 @@ public final class RecipeSnapshot {
         n.maxChance = c.maxChance;
         n.raw = c.raw;
         n.tag = c.tag;
+        // 编程电路的标记与配置号必须一起拷贝，否则保存草稿后电路会退化成普通物品。
+        n.circuit = c.circuit;
+        n.circuitConfig = c.circuitConfig;
         n.displayName = c.displayName;
         n.iconStack = c.iconStack == null || c.iconStack.isEmpty() ? net.minecraft.world.item.ItemStack.EMPTY
                 : c.iconStack.copy();
